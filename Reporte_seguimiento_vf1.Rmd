@@ -1,0 +1,1180 @@
+---
+title: "`r htmltools::HTML('<h1>Secretaría Técnica Ecuador Crece Sin Desnutrición Infantil </h1>')`"
+subtitle: "`r htmltools::HTML('<h2>Dirección de Políticas Públicas, Seguimiento y Monitoreo</h2>')`"
+author: "`r htmltools::HTML('<h3>Informe de Seguimiento al Plan Estratégico Intersectorial para la Prevención y Reducción de la Desnutrición Crónica Infantil</h3>')`"
+output:
+  html_document
+params:
+  fecha: "2023-07-01"
+  descarga: "TRUE"
+---
+
+
+
+```{r setup, include = FALSE}
+
+
+library(lubridate)
+
+
+fecha_corte = params$fecha
+mes_reporte = lubridate::month(fecha_corte)
+descarga = as.logical(glue::glue(params$descarga))
+no_descarga = !descarga
+
+```
+
+<h4>`r  substr(fecha_corte, 1, 7) `</h4>
+
+
+```{css formatting, echo=FALSE}
+
+
+h1 {
+     font-size: 36px;
+     font-weigth: bold;
+     font-family: Cambria;
+     color: #000000;
+     align: center;
+ }
+
+ h2 {
+     font-size: 30px;
+     font-weigth: bold;
+     font-family: Cambria;
+     color: #000000;
+     text-align: center;
+ }
+
+ h3 {
+     font-size: 25px;
+     font-family: Cambria;
+     color: #000000;
+     text-align: center;   
+ }
+ 
+  h4 {
+     font-size: 20px;
+     font-family: Cambria;
+     color: #000000;
+     text-align: center;   
+ }
+ 
+ tfoot {
+  font-size: 80%;
+}
+``` 
+---
+  <meta charset="UTF-8">
+
+  <style type="text/css">
+  
+body{
+  font-family: Cambria;
+  font-size: 12pt;
+  text-align: justify;
+}
+
+</style>
+
+
+```{r procesamiento, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Se determina la fecha de corte del reporte 
+
+# Se llaman las liberías que se usarán
+
+library(kableExtra)
+library(knitr)
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(DT)
+library(reshape2)
+library(ggplot2)
+library(plotly)
+
+
+
+# Se generan las tablas de reporte
+
+source("Parametrizacion.R")
+
+nombre_mes_grafico = colnames(ig_2[mes_reporte + 1])
+
+
+# Se definen vectores y data frames útiles para la redacción
+
+  # Indicadores reportados al mes de análisis. Se crea una variable que rankea a 
+  # los indicadores según su puntaje de cumplimiento (pcm_2). También se asigna 
+  # la semaforización (verde, amarillo o rojo), según el pcm_2.
+
+indicadores_reportados <- puntaje_3 %>% 
+                          filter(mes==mes_reporte) %>% 
+                          select(eje, jerarquia, indicador, institucion, periodicidad, pcm_2) %>% 
+                          mutate(indicador_reportado = if_else(pcm_2 != 0, "Sí", "No")) %>% 
+                          filter(indicador_reportado == "Sí") %>% 
+                          arrange(eje) %>% 
+                          mutate(indicador = paste0(tolower(substr(indicador, 1, 1)), 
+                                                    substr(indicador, 2, nchar(indicador))),
+                                 indicador = gsub("\\.$", "", indicador), 
+                                 rank = rank(pcm_2, ties.method = "min")) %>% 
+                         arrange(rank) %>% 
+                         mutate_if(is.numeric, ~ round(., 2)) %>% 
+                          mutate(semaforo = 
+                                   case_when(pcm_2 == 100 ~ "Verde", 
+                                             pcm_2 >= 85 & pcm_2 < 100 ~ "Amarillo", 
+                                             pcm_2 < 85 ~ "Rojo"))
+
+# Se eliminan los indicadores que no tienen valor reportado en el mes de análisis
+
+ig_2 <- ig_2 %>% filter(!is.na(!!sym(nombre_mes_grafico)))
+
+# Se crea una variable con la semaforización de cada eje
+
+ig_2 <- ig_2 %>% mutate(semaforo = 
+                          case_when(!!sym(nombre_mes_grafico) == round(100/(nrow(ig_2)), 2) ~ "Verde", 
+                                    !!sym(nombre_mes_grafico) >= round(100/(nrow(ig_2))*0.85, 2) & 
+                                    !!sym(nombre_mes_grafico) < round(100/(nrow(ig_2)), 2) ~ "Amarillo", 
+                                    !!sym(nombre_mes_grafico) < round(100/(nrow(ig_2))*0.85, 2) ~ "Rojo")
+                        )
+
+
+
+#  Se obtienen los nombres de los ejes eliminando los números y poniéndolos en 
+#  minúsculas
+
+nombres_ejes <- tolower(gsub("^[1-6]\\. ", "", ig_2$ejes))  
+nombres_ejes_2 <- ig_2$ejes  
+
+
+# Se filtra la tabla para mantener a .los ejes con menor y mayor puntaje. Se crean
+# objetos con los nombres y los valores. 
+
+eje_min <- nombres_ejes[which.min(unlist(ig_2[mes_reporte+1]))]
+eje_min_2 <- nombres_ejes_2[which.min(unlist(ig_2[mes_reporte+1]))]
+value_min <- ig_2[which.min(unlist(ig_2[mes_reporte+1])), mes_reporte+1]
+
+eje_max <- nombres_ejes[which.max(unlist(ig_2[mes_reporte+1]))]
+eje_max_2 <- nombres_ejes_2[which.max(unlist(ig_2[mes_reporte+1]))]
+value_max <- ig_2[which.max(unlist(ig_2[mes_reporte+1])), mes_reporte+1]
+
+
+# Para hacer el análisis por indicadores, se mantienen solo los indicadores máximos 
+# y mínimos de los ejes con mayor y menor puntaje
+
+ind_min_eje_min <- indicadores_reportados %>% 
+                   filter(eje == eje_min_2) %>% 
+                   arrange(pcm_2) %>% 
+                   slice(1:2) %>% 
+                   select(institucion, indicador, pcm_2)
+  
+ind_max_eje_max <- indicadores_reportados %>% 
+                   filter(eje == eje_max_2) %>% 
+                   arrange(desc(pcm_2)) %>% 
+                   slice(1:2) %>% 
+                   select(institucion, indicador, pcm_2)
+
+# Se ordenan las insticiones según su puntaje. Luego, se crean objetos con las instituciones
+# rankeadas.
+
+instituciones_ordenadas <- tabla_reporte_2 %>% 
+                           pivot_longer(cols = -eje, 
+                                        names_to = "institucion") %>% 
+                           filter(eje == "IG Total") %>% 
+                           arrange(value) %>% 
+                           pivot_wider(id_cols = eje, names_from = institucion) %>% 
+                           select(-eje)
+
+instituciones_ordenadas <- instituciones_ordenadas[which(!is.na(instituciones_ordenadas))]                        
+
+instituciones_ordenadas_2 <- tabla_reporte_2 %>% 
+                           pivot_longer(cols = -eje, 
+                                        names_to = "institucion") %>% 
+                           arrange(value) %>% 
+                           pivot_wider(id_cols = eje, names_from = institucion) %>% 
+                           select(-eje)
+
+
+rank_inst <- sort(rank(instituciones_ordenadas[nrow(instituciones_ordenadas), ], ties.method = "min"))
+rank_inst_max <- sort(rank(instituciones_ordenadas[nrow(instituciones_ordenadas), ], ties.method = "max"))
+
+# Se obtienen los indicadores máximos y mínimos de las instituciones
+
+ind_inst_min_1 <- puntaje %>% 
+                filter(institucion %in% names(instituciones_ordenadas[rank_inst == 1]), 
+                       mes == mes_reporte, 
+                       !is.na(metaalcanzada)) %>%                 
+                distinct(indicador, .keep_all = T)
+
+ind_inst_min_2 <- puntaje %>% 
+                filter(institucion %in% names(instituciones_ordenadas[rank_inst == (sum(rank_inst == 1) + 1)]), 
+                       mes == mes_reporte, 
+                       !is.na(metaalcanzada)) %>%                 
+                distinct(indicador, .keep_all = T)
+
+ind_stecsdi <- indicadores_reportados %>% 
+               filter(institucion == "STECSDI") %>%
+               mutate(rank = rank(pcm_2, ties.method = "min"))
+
+
+inst_rojo = tabla_reporte_1 %>% 
+            filter(ig_total < 85) %>% 
+            select(institucion, ig_total)
+
+inst_amarillo = tabla_reporte_1 %>% 
+            filter(ig_total >= 85 & ig_total < 100) %>% 
+            select(institucion, ig_total)
+
+inst_verde = tabla_reporte_1 %>% 
+            filter(ig_total == 100) %>% 
+            select(institucion, ig_total)
+
+ind_rojo = indicadores_reportados %>% 
+           filter(semaforo == "Rojo") %>% 
+           select(indicador, institucion, pcm_2)
+
+```
+
+
+
+<font size="5">**Generalidades**</font>
+
+El presente reporte  describe  el avance de las acciones que se implementan por cada institución responsable de la dotación de bienes y servicios orientados a la operatividad del Plan Estratégico Intersectorial para la Prevención y Reducción de la Desnutrición Crónica Infantil (PEIPRDCI) y el cumplimiento de la Estrategia Nacional Ecuador Crece sin Desnutrición Crónica Infantil. 
+
+Considerando la información entregada por cada cartera de estado, desde la Dirección de Políticas Públicas, Seguimiento y Monitoreo de la STECSDI se procede a calcular el  Índice de Gestión (IG) y el Avance Institucional (AI). El mecanismo de cálculo de estos instrumentos fue trabajado interinstitucionalmente y aprobado en el seno del Comité Intersectorial para la Prevención y Reducción de la DCI. La metodología (Metodología Para El Seguimiento Al Plan Estratégico Intersectorial Para La Prevención Y Reducción De La Desnutrición Crónica Infantil) puede revisarse [aquí](https://drive.google.com/file/d/1nBjKAdqmKkCozAU9c3g7YpORe5DywjRe/view?usp=sharing) (para ser redirigido al enlace, haga click derecho en el hipervículo y luego en "Abrir vínculo en una pestaña nueva"). 
+
+
+Para el periodo 2023, entre las instituciones públicas involucradas en la operatividad del Plan, se aprobaron `r nrow(datos_ini2)` indicadores de gestión y resultado. Dado que los indicadores tienen distinta periodicidad, sus reportes, así como el respectivo cálculo del IG y el AI, se circunscriben  a la información disponible en el periodo de análisis. Así, el presente documento se ha generado con la información de `r nrow(indicadores_reportados)` indicadores, `r nrow(indicadores_reportados %>% filter(jerarquia == "Gestión"))` de gestión y  `r nrow(indicadores_reportados %>% filter(jerarquia == "Resultado"))` de resultado, reportados por `r nrow(indicadores_reportados %>% distinct(institucion, .keep_all = T))` instituciones públicas `r ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))` de `r year(fecha_corte)`.
+
+<!-- A continuación, se presenta el índice y su desgregación por eje estratégico. Posteriormente, se expone los resultados de cada una de las instituciones públicas. Finalmente, se discuten los resultados de los indicadores para los que se dispone de información en `r meses[mes_reporte]` de `r year(fecha_corte)`.  -->
+
+
+<font size="5">**Índice de gestión**</font>
+
+<!-- Considerando que el puntaje máximo que puede alcanzar cada eje es de `r round(100/(nrow(ig_2)), 2)`, se identifica que, de los `r nrow(ig_2)` ejes, `r nrow(ig_2 %>% filter(semaforo == 'Verde'))` tienen una semaforización verde (puntaje máximo), `r nrow(ig_2 %>% filter(semaforo == 'Amarillo'))` una amarilla (puntaje entre el 85% y menor que el 100% del valor máximo) y `r nrow(ig_2 %>% filter(semaforo == 'Rojo'))` una roja (menos del 85% del puntaje máximo).  -->
+
+<!-- En particular, el eje `r which.min(unlist(ig_2[mes_reporte+1]))`, relativo a la `r eje_min `, presenta el menor puntaje, con `r value_min ` puntos.  -->
+
+
+`r ifelse(mes_reporte == 1, paste('En', meses[1]), paste('Entre', meses[1], 'y', meses[mes_reporte]))` de `r year(fecha_corte)`, el IG alcanzó un resultado de `r round(ig_3[nrow(ig_3), mes_reporte + 1], 2)` puntos sobre 100, valor que representa un avance significativo respecto a la ejecución de acciones identificadas por cada institución, en el marco de la instrumentación del Plan Estratégico.
+
+``` {r redaccion_2, echo = FALSE, results='asis'}
+
+cat(glue::glue("
+
+En el Gráfico 1 se presenta la desagregación de este índice por ejes estratégicos. En él, se identifica que {if(nrow(ig_2 %>% filter(semaforo == 'Rojo')) > 0) {
+
+paste(nrow(ig_2 %>% filter(semaforo == 'Rojo')), 'de los', nrow(ig_2), 'ejes tienen una semaforización roja debido a que su puntaje es inferior a ',  round(100/(nrow(ig_2))*0.85, 2), '(el 85% de', paste0(round(100/(nrow(ig_2)), 2), ','), 'el valor más alto posible). En particular, el eje', paste0(which.min(unlist(ig_2[mes_reporte+1])), ','), 'relativo a la ', paste0(eje_min, ','), 'presenta el menor puntaje, con', value_min, 'puntos.')
+
+} else {
+
+paste('el eje con menor desempeño es el relacionado a la', paste0(eje_min, '.'), 'Con un puntaje de', paste0(as.data.frame(value_min), ','), 'tiene una semaforización', 
+   case_when(
+   value_min == round(100/(nrow(ig_2)), 2) ~ paste('todos los ejes alcanzan la puntuación máxima de', round(100/(nrow(ig_2)), 2)), 
+   between(as.numeric(value_min), round(100/(nrow(ig_2)), 2)*0.85, round(100/(nrow(ig_2))-0.00001, 2))  ~ paste('amarilla, en tanto logra entre 85% y menos del 100% de', paste0(round(100/(nrow(ig_2)), 2), ','), 'el máximo puntaje posible.'))
+   )
+}
+} 
+
+{
+if (nrow(ig_2 %>% filter(semaforo %in% c('Rojo', 'Amarillo'))) > 0) {
+
+paste('Entre los indicadores que inciden en un menor desempeño en este eje se encuentra el de', ind_min_eje_min[1, 'indicador'],  'de', paste0(ind_min_eje_min[1, 'institucion'], ','), 'mismo que, conforme reporta la institución, tiene',  round(ind_min_eje_min[1, 'pcm_2'], 2), if_else(round(ind_min_eje_min[1, 3], 2) == 1, 'punto', 'puntos'), 'de cumplimiento de meta.', if_else(ind_min_eje_min[2, 3] < 85 & nrow(ind_min_eje_min) == 2, paste('Otro indicador que resalta por su bajo rendimiento en este eje es el', ind_min_eje_min[2, 2], 'de', paste0(ind_min_eje_min[2, 1],','), 'mismo que tiene', round(ind_min_eje_min[2, 3], 2), 'puntos de cumplimiento de meta.'), ''))
+
+paste0(paste('Por otro lado, el eje', which.max(unlist(ig_2[mes_reporte+1])), 'relacionado a la', eje_max, 'obtuvo el valor más alto del mes del periodo', meses[1], '-', meses[mes_reporte], 'con', value_max, 'puntos. En este eje',   paste0(if_else(nrow(ind_max_eje_max) == 2, paste('destacan dos indicadores: (1)',ind_max_eje_max[1, 2], 'de', ind_max_eje_max[1, 1], 'y (2)', ind_max_eje_max[2, 2],'de', paste0(ind_max_eje_max[2, 1], ','), if_else(ind_max_eje_max[1, 3] == ind_max_eje_max[2, 3], paste('ambos con', ind_max_eje_max[2, 3], 'puntos de cumplimiento de meta'), paste('con', ind_max_eje_max[1, 3], 'y', paste0(ind_max_eje_max[2, 3], ','), 'respectivamente'))), paste('destaca el indicador de', ind_max_eje_max[1, 2], 'de', paste0(ind_max_eje_max[1, 1], ','), 'con', ind_max_eje_max[1, 3], if_else(round(ind_max_eje_max[1, 3], 2) == 1, 'punto', 'puntos'),'de cumplimiento de meta')))), '.')
+
+}
+
+}
+
+"))
+
+
+```
+
+
+
+<center><span style='font-size: 20px;'>**Gráfico 1. Índice de Gestión por Ejes Estratégicos* **</span></center>
+```{r grafico 1,  echo=FALSE, fig.show="hold", out.width="90%", fig.width=12, fig.align='center', warning=FALSE}
+
+
+peso_eje = c(ig_3[nrow(ig_3) - 1, ][nombre_mes_grafico])
+
+
+ig_4 <- ig_3[c(1, mes_reporte + 1)][-c(nrow(ig_3), nrow(ig_3)-1), ] %>% 
+        mutate(peso_eje = peso_eje) %>% 
+        mutate_if(str_detect(colnames(.), paste0(nombre_mes_grafico, "|peso")),
+                  as.numeric) 
+
+ig_5 <- as.data.frame(ig_4) %>% 
+        filter(!is.na(!!sym(nombre_mes_grafico))) %>% 
+        mutate(lab.ypos = cumsum(!!sym(nombre_mes_grafico)) - 0.5*!!sym(nombre_mes_grafico)) 
+
+ig_6 <- ig_5 %>% mutate(cum_sum = cumsum(!!sym(nombre_mes_grafico))) %>% 
+                 mutate(lab = max(cum_sum, na.rm = T) - cum_sum + !!sym(nombre_mes_grafico)*0.5)
+
+ig_7 <- ig_6 %>% 
+        mutate(figura = 
+                 case_when(!!sym(nombre_mes_grafico) == peso_eje ~ "\u25CF", 
+                           !!sym(nombre_mes_grafico) >= peso_eje*0.85 & !!sym(nombre_mes_grafico) < peso_eje ~ "\u25B2", 
+                           !!sym(nombre_mes_grafico) < peso_eje*0.85 ~ "\u25A0"), 
+               semaforo =  
+                 case_when(!!sym(nombre_mes_grafico) == peso_eje ~ "#00D26A", 
+                           !!sym(nombre_mes_grafico) >= peso_eje*0.85 & !!sym(nombre_mes_grafico) < peso_eje ~ "#FFC400", 
+                           !!sym(nombre_mes_grafico) < peso_eje*0.85 ~ "red")) %>% 
+        filter(!is.na(!!sym(nombre_mes_grafico)))
+
+semaforo = ig_7$semaforo
+
+plot1 <- ggplot(ig_7, aes(x = 2, y = !!sym(nombre_mes_grafico), fill = ejes)) +
+  geom_bar(stat = "identity", color = "white") +
+  # scale_fill_manual(discrete = TRUE, reverse = TRUE) + # reverse the colors
+  coord_polar(theta = "y", start = 0) +
+  geom_text(aes(y = lab, label = !!sym(nombre_mes_grafico)), color = "black", size = 5) +
+  geom_label(aes(y =lab,
+                 label = figura),
+             vjust = 1.3,
+             color = semaforo, 
+             size = 10, 
+             show.legend = F, 
+             label.padding = unit(0.3, "points"), 
+             label.r = unit(0.1, "lines"), 
+             label.size = NA) +
+  annotate(geom = 'text', x = 0.5, y = 0, label = paste("IG:", ig_3[nrow(ig_3), mes_reporte+1]), size = 6) +
+  scale_fill_manual(values = c("#999999", "pink", "#56B4E9",
+            "#3CB371", "#DEB887", "#F0E68C")) +
+  # labs(caption = "*Interpretación de las figuras:\nCírculo: puntaje máximo(16.67)\nTriángulo: entre 14.17 y 16.67\nCuadrado: menos de 14.17.") +
+  theme_void() +
+  theme(legend.title = element_blank(), 
+        legend.text = element_text(size = 16),
+        legend.position = "right",
+        plot.caption = element_text(hjust=0, size = 12), 
+        text = element_text(family = "Cambria")) +
+  xlim(.5, 2.5) 
+plot1
+
+# ggplotly(plot1)
+
+
+```
+
+
+
+<div style="padding-left: 60px; font-size: 12px;">
+  <span style="display: inline-block;">*&#x1F7E2;: puntaje máximo (`r round(100/(nrow(ig_7)), 2)`)</span>;
+  <span style="display: inline-block; color: #FCAE1E;">&#x25B2;</span>
+  <span style="display: inline-block;">: `r round((100/(nrow(ig_7)))*0.85, 2)` <= puntaje < `r round((100/(nrow(ig_7))), 2)` </span>;
+  <span style="display: inline-block;">&#x1F7E5;: < `r round((100/(nrow(ig_7)))*0.85, 2)` </span>  <br><br>
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>
+
+
+En el Gráfico 2 se puede apreciar el aporte de las instituciones públicas vinculadas al abordaje de la DCI a cada eje del Plan Estratégico Intersectorial. Las entidades que tienen mayor aportación en un eje específico son aquellas que han reportado y cumplido metas de indicadores de resultado, en tanto estos tienen una mayor ponderación que los indicadores de gestión. Aquellas instituciones que no aparecen en el gráfico son las que, debido a la periodicidad de sus indicadores, aún no han reportado ningún valor.\ 
+\  
+\  
+\  
+
+
+<center><span style='font-size: 20px;'>**Gráfico 2. Aporte de cada institución al cumplimiento de los ejes estratégicos **</span></center>
+
+```{r grafico 2, echo = FALSE, warning=FALSE, out.width="90%", fig.height=7, fig.align='center', message=FALSE}
+
+
+aporte_inst_2 <- aporte_inst %>% 
+                 mutate(eje = if_else(eje == "5. Talento Humano y Mejora de la  Gestión Institucional",
+                                "5. Talento Humano y Mejora de la\n Gestión Institucional", eje)) %>%
+                 filter(mes == mes_reporte) %>% 
+  ungroup()
+        
+plot2 <- ggplot(aporte_inst_2, aes(x = institucion, y = aporte_inst, fill = eje)) + 
+  facet_wrap(~eje, scale="free", nrow = 3) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "1.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "1."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "#DEB887")) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "2.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "2."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "pink")) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "3.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "3."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "#999999")) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "4.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "4."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "#3CB371")) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "5.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "5."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "#F0E68C")) +
+  geom_col(data = aporte_inst_2 %>% filter(str_detect(eje, "6.")), 
+           width = if_else(nrow(aporte_inst_2 %>% filter(str_detect(eje, "6."))) %in% c(1:3), 0.5, 0.8), 
+           aes(fill = "#56B4E9")) +
+geom_text(aes(label = round(aporte_inst, 2)), position = position_stack(vjust = 0.5), color = "black", size = 2.5) + # Add value labels above the bars
+labs(y = "Puntaje del eje estratégico", x = "") +
+  theme(
+        legend.title = element_blank(),
+        rect = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.text.x = element_text(size = 8)
+        ) +
+  guides(fill = "none") +
+  scale_fill_manual(values = rep(c("#3CB371", "#F0E68C", "#56B4E9", "#999999", "#DEB887", "pink"), 2))  #A6B727
+
+#  scale_x_discrete(guide = guide_axis(n.dodge=2))
+
+  
+plot2
+
+
+# ggplotly(plot2)
+
+# 
+# 
+# tabla_reporte_3 <- tabla_reporte_1[c(1, length(tabla_reporte_1), 2:(length(tabla_reporte_1) - 1))] %>%
+#   mutate_if(is.numeric, ~ round(., 2)) %>%
+#   mutate_if(is.numeric, ~ if_else(is.na(.) | . == 0, "ND", as.character(.))) %>%
+#   mutate(IG_TOTAL = paste("  Total:\n", ig_total)) %>%
+#   select(-valor_max_eje, -ig_total) %>%
+#   ungroup() %>%
+#   filter(IG_TOTAL != "  Total:\n ND")
+# 
+# 
+# 
+# tabla_reporte_4 <- melt(tabla_reporte_3,
+#                 id.vars = "institucion",
+#                 variable.name = "eje",
+#                 value.name = "ig") %>%
+#                 mutate(peso = if_else(eje == "IG TOTAL", 100/3, 100/6)) %>%
+#                 arrange(institucion) %>%
+#                 mutate(ejes = rep(letters[1:7], 10),
+#                        ejes2 = rep(letters[8:14], 10),
+#                        ejes3 = rep(letters[15:21], 10),
+#                        ejes4 = rep(c(letters[22:26], c("za", "zb")), 10),
+#                        ejes5 = rep(paste0("z", letters[3:9]), 10),
+#                        ejes6 = rep(paste0("z", letters[10:16]), 10), 
+#                        ejes7 = rep(paste0("z", letters[17:23]), 10),
+#                        ejes8 = rep(paste0("zz", letters[1:7]), 10), 
+#                        ejes9 = rep(paste0("zz", letters[8:14]), 10), 
+#                        ejes10 = rep(paste0("zz", letters[15:21]), 10))
+# 
+# colors <- c("green", "#56B4E9", "orange", "#3CB371", "yellow", "#C4A484", "white")
+# 
+# tab_colors <- tabla_reporte_4 %>% mutate(color = rep(colors, 10),
+#                                          color = if_else(ig == "ND", "gray", color))
+# 
+# ggplot(tab_colors, aes(x = factor(institucion, levels = unique(institucion)[sample(1:10)]), y = peso, label = ig)) +
+#   geom_bar(stat = "identity", aes(fill = ejes), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[1])) +
+#   geom_bar(stat = "identity", aes(fill = ejes2), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[2])) +
+#   geom_bar(stat = "identity", aes(fill = ejes3), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[3])) +
+#   geom_bar(stat = "identity", aes(fill = ejes4), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[4])) +
+#   geom_bar(stat = "identity", aes(fill = ejes5), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[5])) +
+#   geom_bar(stat = "identity", aes(fill = ejes6), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[6])) +
+#   geom_bar(stat = "identity", aes(fill = ejes7), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[7])) +
+#   geom_bar(stat = "identity", aes(fill = ejes8), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[8])) +
+#   geom_bar(stat = "identity", aes(fill = ejes9), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[9])) +
+#   geom_bar(stat = "identity", aes(fill = ejes10), data = tab_colors %>% filter(institucion == tabla_reporte_3$institucion[10])) +
+#   coord_flip() +
+#   geom_text(aes(label = ig),
+#             position = position_stack(vjust = 0.5)) +
+#   scale_fill_manual(values = c(rev(tab_colors$color[1:7]),
+#                                rev(tab_colors$color[8:14]),
+#                                rev(tab_colors$color[15:21]),
+#                                rev(tab_colors$color[22:28]),
+#                                rev(tab_colors$color[29:35]), 
+#                                rev(tab_colors$color[36:42]),
+#                                rev(tab_colors$color[43:49]),
+#                                rev(tab_colors$color[50:56]),
+#                                rev(tab_colors$color[57:63]),
+#                                rev(tab_colors$color[64:70])))  +
+#   theme(legend.title = element_blank(),
+#         rect = element_blank(),
+#         axis.title = element_blank(),
+#         axis.ticks.x = element_blank(),
+#         axis.text.x = element_blank(),
+#         axis.ticks.y = element_blank()
+#         ) +
+#   guides(fill = "none")
+
+```
+
+
+
+<div style="padding-left: 60px; font-size: 12px;">
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>
+
+<!-- <div style="padding-left: 60px; font-size: 18px;"> -->
+<!--   <span style="display: inline-block;">&#x1F7E5; Generación de entorno habilitador</span> -->
+<!--   <span style="display: inline-block;">&#x1F7E7; Movilización de recursos</span> -->
+<!--   <span style="display: inline-block;">&#x1F7E8; Articulación territorial </span> -->
+<!--   <span style="display: inline-block;">&#x1F7E8; Gestión de la información </span> -->
+<!--   <span style="display: inline-block;">&#x1F7E8; Talento humano y mejora de la GI </span> -->
+<!--   <span style="display: inline-block; color: blue; font-size: 17px;">&#x25A0; </span> Corresponsabilidad y transparencia  -->
+<!-- <div  style="width: 11px; height: 12px; background-color: brown; margin-left: 3px;: Corresponsabilidad y transparencia"> -->
+<!-- </div> -->
+
+<!-- <div  style="width: 11px; height: 12px; background-color: brown; margin-left: 3px;">:  -->
+
+<font size="5">**Avance institucional**</font>
+
+<!-- Aquí se genera una redacción distinta dependiendo de si las instituciones empatan en términos de ranking.  -->
+
+
+```{r, echo = FALSE, results='asis'}
+cat(glue::glue("
+{ifelse(mes_reporte == 1, paste('En', meses[1]), paste('Entre', meses[1], 'y', meses[mes_reporte]))} de {year(fecha_corte)}, {nrow(indicadores_reportados %>% distinct(institucion))} instituciones públicas reportaron el estado de sus indicadores, dichas instituciones son: {paste(filter(tabla_reporte_1, !is.na(ig_total))$institucion[-length(filter(tabla_reporte_1, !is.na(ig_total))$institucion)], collapse = ', ')} {if_else(substr(names(tabla_reporte_2)[length(names(tabla_reporte_2))], 1, 1) == 'I', 'e', 'y') }  { filter(tabla_reporte_1, ig_total != 0)$institucion[length(filter(tabla_reporte_1, ig_total != 0)$institucion)]}. En el Gráfico 3, se expone la desagregación del AI por eje y por institución pública. En él, se puede observar que {
+if(nrow(inst_verde > 0)) {
+paste(
+case_when(nrow(inst_verde) == 1 ~ inst_verde[1, 1], 
+          nrow(inst_verde) == 2 ~ paste(inst_verde[1, 1], 'y', inst_verde[2, 1]),
+          nrow(inst_verde)  > 2 ~ paste(
+                                  paste(
+                                  inst_verde[, 1][-length(inst_verde[, 1])], collapse = ', ' ), 
+                                  'y', 
+                                  inst_verde[, 1][length(inst_verde[, 1])])), 
+if_else(nrow(inst_verde) == 1, 'ha', 'han'), 
+'cumplido todas sus metas, teniendo un AI de 100.'
+      )
+                       }
+} {
+if(nrow(inst_amarillo > 0)) {
+paste(
+case_when(nrow(inst_amarillo) == 1 ~ inst_amarillo[1, 1], 
+          nrow(inst_amarillo) == 2 ~ paste(inst_amarillo[1, 1], 'y', inst_amarillo[2, 1]),
+          nrow(inst_amarillo)  > 2 ~ paste(
+                                  paste(
+                                  inst_amarillo[, 1][-length(inst_amarillo[, 1])], collapse = ', ' ), 
+                                  'y', 
+                                  inst_amarillo[, 1][length(inst_amarillo[, 1])])), 
+if_else(nrow(inst_amarillo) == 1, 'tiene', 'tienen'), 
+'un puntaje mayor o igual a 85 y menor a 100.'
+      )
+                       }
+} {
+if(nrow(inst_rojo > 0)) {
+paste(
+case_when(nrow(inst_rojo) == 1 ~ inst_rojo[1, 1], 
+          nrow(inst_rojo) == 2 ~ paste(inst_rojo[1, 1], 'y', inst_rojo[2, 1]),
+          nrow(inst_rojo)  > 2 ~ paste(
+                                  paste(
+                                  inst_rojo[, 1][-length(inst_rojo[, 1])], collapse = ', ' ), 
+                                  'y', 
+                                  inst_rojo[, 1][length(inst_rojo[, 1])])), 
+if_else(nrow(inst_rojo) == 1, 'tiene', 'tienen'), 
+'el menor cumplimiento, con menos de 85 puntos.'
+      )
+                       }
+}
+"))
+
+```
+
+<!-- `r paste(if_else(length(rank_inst[rank_inst== 1]) == 1, "Reportó", "Reportaron un conjunto de"), nrow(ind_inst_min_1), if_else(nrow(ind_inst_min_1) == 1, "solo indicador cuyo porcentaje de cumplimiento es igual puntaje de la institución", paste("indicadores, cuyo promedio de cumplimiento fue de", paste0(round(mean(ind_inst_min_1$pcm_2), 2), "%")))) `.  -->
+
+
+<!-- `r paste(if_else(length(rank_inst[rank_inst== 1]) == 1 + 1, "Esta institución otorgó información de", "Estas instituciones otorgaron información de"), nrow(ind_inst_min_2), if_else(nrow(ind_inst_min_2) == 1, paste("indicador"), paste("indicadores, cuya media de cumplimiento fue del", paste0(round(mean(ind_inst_min_2$pcm_2), 2), "%"))))`.  -->
+\   
+\   
+\   
+\  
+\   
+\   
+\   
+\  
+\  
+\   
+\   
+\  
+\  
+\   
+\   
+\  
+\  
+\   
+\   
+\  
+\  
+\  
+\  
+\   
+\   
+\  
+\  
+\   
+\  
+\  
+\  
+\  
+\   
+\   
+\  
+\  
+\  
+\   
+\   
+\  
+\  
+\   
+\  
+\  
+\  
+\  
+
+
+<center><span style='font-size: 20px;'>**Gráfico 3. Avance Institucional* **</span></center>
+```{r grafico_3,  echo=FALSE, fig.show="hold", out.width="90%",  fig.width=12, fig.height= 7, fig.align='center', warning=FALSE}
+
+tabla_reporte_3 <- 
+  tabla_reporte_1 %>% 
+  filter(ig_total != 0) %>% 
+  ungroup() 
+
+
+#   mutate_if(!(colnames(.) %in% c("institucion", "valor_max_eje", "ig_total")),  
+#             ~ case_when(
+#                         . == valor_max_eje ~ paste0(., " ↑"), 
+#                         (.>= valor_max_eje*0.85) & (. < valor_max_eje) ~ paste0(., " →"), 
+#                         . < valor_max_eje*0.85 ~ paste0(., " ↓"))) %>% 
+#   mutate(ig_total =  case_when(
+#                         ig_total == 100 ~ paste0(ig_total, " ↑"), 
+#                         ig_total >= 85 & (15/ig_total < 100) ~ paste0(ig_total, " →"), 
+#                         ig_total < 85 ~ paste0(ig_total, " ↓"))) %>% 
+#   mutate_all(~ replace_na(., "ND")) %>% 
+#   mutate(valor_max_eje = ifelse(valor_max_eje %% 1 == 0, 
+#                                 gsub("\\.00", "", as.character(valor_max_eje)), valor_max_eje))
+# 
+# 
+# 
+# tabla_reporte_3 <- tabla_reporte_3[c(1, length(tabla_reporte_3), 2:(length(tabla_reporte_3) - 1))] %>%
+#            ungroup() %>% 
+#            mutate_if(is.numeric, ~ round(., 2)) %>%
+#            mutate_if(is.numeric, ~ifelse(is.na(.) | . == 0, "ND", as.character(.))) %>%
+#            mutate(IG_TOTAL = paste("  Total:\n", ig_total)) %>% 
+#            select(-valor_max_eje, -ig_total) %>% 
+#            filter(IG_TOTAL != "  Total:\n ND" )
+# 
+
+tabla_reporte_4 <- melt(tabla_reporte_3,
+                        id.vars = "institucion",
+                        variable.name = "eje",
+                        value.name = "ig") %>%
+                  arrange(eje) %>% 
+                  group_by(institucion)
+
+
+# plot3 <- ggplot(tabla_reporte_3, aes(x = institucion, y = peso, fill = eje, label = ig)) +
+#   geom_bar(stat = "identity") +
+#   coord_flip() +
+#   geom_text(aes(label = ig),
+#             position = position_stack(vjust = 0.5), 
+#             size = 5) +
+#   scale_fill_manual(values = rev(c("green", "#56B4E9", "orange", "#3CB371", "yellow", "#C4A484", "white"))) +
+#   theme(legend.title = element_blank(),
+#         rect = element_blank(), 
+#         axis.title = element_blank(), 
+#         axis.text.x = element_blank(), 
+#         axis.ticks.x = element_blank(), 
+#         axis.ticks.y = element_blank(),
+#         axis.text.y = element_text(size = 15),
+#         legend.text = element_text(size = 15),
+#         legend.position = "bottom", 
+#         legend.justification = "left") +
+#   guides(fill = guide_legend(ncol = 2), color = guide_legend(ncol = 2))
+# 
+# plot3
+
+
+# Calculate the total values for each institution
+totals <- tabla_reporte_4 %>%
+  filter(!(eje %in% c("valor_max_eje", "ig_total"))) %>% 
+  group_by(institucion) %>%
+  left_join(tabla_reporte_3 %>% select(institucion, ig_total), by = "institucion") %>% 
+  arrange(desc(ig_total), institucion) %>% 
+  mutate(valor_max_eje = 100/sum(!is.na(ig)),  
+         ig_total_lab = 
+         case_when(
+           ig_total == 100 ~ paste0(ig_total, " ↑"),
+           ig_total > 85 & ig_total < 100 ~ paste0(ig_total, " →"),
+           ig_total < 85 ~ paste0(ig_total, " ↓"))
+         ) 
+  
+
+tabla_reporte_5 <- tabla_reporte_4 %>% 
+                   group_by(institucion) %>% 
+                   mutate(valor_max_eje = 100/sum(!is.na(ig[!(eje %in% c("valor_max_eje", "ig_total"))]))) %>% 
+                   ungroup() %>% 
+                   mutate(ig_2 = 
+                          case_when(
+                          ig == round(valor_max_eje, 2) ~ paste0(ig, " ↑"),
+                          (ig >= round(valor_max_eje*0.85, 2)) & (ig < valor_max_eje) ~ paste0(ig, " →"),
+                          ig < round(valor_max_eje*0.85, 2) ~ paste0(ig, " ↓"))) 
+
+
+
+# Create the stacked bar chart with value labels
+ggplot(tabla_reporte_5 %>% filter(!(eje %in% c("ig_total", "valor_max_eje"))), 
+       aes(x = factor(institucion, levels = unique(totals$institucion)), 
+           y = ig, fill = eje, label = ig_2)) + 
+  geom_col() +
+  geom_text(data = totals %>% distinct(institucion, .keep_all =T), 
+            aes(y = ig_total, label = ig_total_lab),
+            position = position_stack(vjust = 1.04), color = "black", size = 5) +
+  geom_text(position = position_stack(vjust = 0.5), color = "black", size = 5)  + 
+  theme(legend.title = element_blank(),
+        rect = element_blank(),
+        axis.title = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(size = 13),
+        legend.text = element_text(size = 13),
+        legend.position = "bottom",
+        legend.justification = "center") +
+    guides(fill = "none") +
+  scale_fill_manual(values = rep(c("#999999", "pink", "#56B4E9",
+            "#3CB371", "#DEB887", "#F0E68C"), 2)) +
+   guides(fill = guide_legend(ncol = 2), color = guide_legend(ncol = 2))
+
+
+# ggplotly(plot3) %>% layout(legend = list(orientation = "h", x = -0.2, y = 0))
+
+# tabla_reporte_3 <- 
+#   tabla_reporte_1 %>% 
+#   ungroup() %>% 
+#   mutate_if(!(colnames(.) %in% c("institucion", "valor_max_eje", "ig_total")),  
+#             ~ case_when(
+#                         . == valor_max_eje ~ paste0(., " ↑"), 
+#                         (.>= valor_max_eje*0.85) & (. < valor_max_eje) ~ paste0(., " →"), 
+#                         . < valor_max_eje*0.85 ~ paste0(., " ↓"))) %>% 
+#   mutate(ig_total =  case_when(
+#                         ig_total == 100 ~ paste0(ig_total, " ↑"), 
+#                         ig_total >= 85 & (ig_total < 100) ~ paste0(ig_total, " →"), 
+#                         ig_total < 85 ~ paste0(ig_total, " ↓"))) %>% 
+#   mutate_all(~ replace_na(., "ND")) %>% 
+#   mutate(valor_max_eje = ifelse(valor_max_eje %% 1 == 0, 
+#                                   gsub("\\.00", "", as.character(valor_max_eje)), valor_max_eje))
+# 
+# colnames(tabla_reporte_3) <- c("Institución", "Gestión de entorno habilitador", 
+#                                "Movilización de recursos", "Articulación territorial", 
+#                                "Talento humano y mejora de gest. institucional",
+#                                "Gestión de la información", 
+#                                "Correspon- sabilidad y transparencia", 
+#                                "Valor máximo de cada eje*", 
+#                                "IG total")
+
+# tabla_reporte_3 <- tabla_reporte_2 %>% 
+#         mutate_if(is.numeric, ~ case_when(
+#           . == .[nrow(tabla_reporte_2)-1] ~ paste0(., " ↑"), 
+#           (.>= .[nrow(tabla_reporte_2)-1]*0.85) & (. < .[nrow(tabla_reporte_2)-1]) ~ paste0(., " →"), 
+#           . < .[nrow(tabla_reporte_2)-1]*0.85 ~ paste0(., " ↓"),  
+#           . %in% tabla_reporte_2[8, ] & . == 100 ~ paste0(., " ↑"), 
+#           . %in% tabla_reporte_2[8, ] &  between(., 85, 99.99) ~ paste0(., " →"), 
+#           . %in% tabla_reporte_2[8, ] &  . < 85 ~ paste0(., " →"))) %>% 
+#         mutate_all(~ replace_na(., "ND"))
+# 
+# tabla_reporte_3[7, ] <- tabla_reporte_2[7, ] %>% mutate_all(as.character)
+#       
+# colnames(tabla_reporte_3) <- c("Eje Estratégico", names(tabla_reporte_2)[-1])
+
+# tabla_reporte_3 %>%
+#     kbl(caption = paste("<center><span style='font-size: 20px;'>**Tabla 1. Índice de gestión por eje estratégico y por institución pública** </span></center>"),  
+#         table.attr = "style='width:300%;'") %>% 
+#     kable_classic_2(full_width = F, 
+#                     html_font = "Cambria" 
+#                     ) %>%
+#     row_spec(0, background = "darkblue", bold = T, color = "white") %>%
+#     # row_spec(nrow(tabla_reporte_3), background = "darkblue", bold = T, color = "white") %>%
+#     # row_spec(nrow(tabla_reporte_3) - 1,  bold = T, color = "black") %>% 
+#     column_spec(c(2:length(tabla_reporte_3)), width_min = "4.5em", width_max = "4.5") %>% 
+#     footnote(general = "*El valor máximo  se calcula dividiendo 100 para el número de ejes para los que se tiene información en cada institución. Así, por ejemplo, si una institución dispone de información para 4 ejes en el mes de análisis, el valor máximo que podrá tomar cada uno es de 25. En el caso del IG total, el valor máximo es siempre 100\n** ↑: máximo puntaje; →: puntaje entre el 85% y menos del 100% del máximo posible; ↓: puntaje por debajo del 85% del máximo posible.\n\\*\\**ND: no se dispone información para esta institución en este eje. Esto puede ocurrir porque la institución no tiene indicadores en este eje o no los reporta en este mes.",
+#               general_title = "") 
+
+# # Create a sample data frame
+# df <- data.frame(id = 1:5, value = c(10, 5, 8, 12, 4))
+# 
+# # Define the threshold
+# threshold <- 6
+# 
+# # Add a red triangle if value is less than threshold
+# df <- df %>% 
+#   mutate(marker = ifelse(value < threshold, "<span style='color:red;'>&#9650;</span>", ""))
+# 
+# # Print the data frame
+# knitr::kable(df, escape = FALSE)
+
+ 
+```
+
+
+
+<div style="font-size: 12px;">
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>
+
+<div style="font-size: 12px;">
+***Nota 1:** El valor máximo de cada eje depende del número de ejes para los que se tiene información disponible en cada institución. Así, por ejemplo, si una entidad tiene indicadores reportados en 4 ejes, entonces el valor máximo es 25 (100 dividido para 4). De la misma forma, si una institución presenta información de indicadores en 1 eje, éste podrá tomar un valor de hasta 100 (100 dividido para 1), y así sucesivamente. 
+
+***Nota 2:** ↑: máximo puntaje; →: 85% >= puntaje < 100% del máximo posible; ↓: puntaje < 85% del máximo posible.
+</div>
+
+
+<font size="5">**Estado de los indicadores**</font>
+
+En cuanto al estado de los indicadores, de los `r nrow(indicadores_reportados)` reportados `r ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))` de `r year(fecha_corte)`, `r nrow(indicadores_reportados %>% filter(semaforo == "Rojo"))` presentan una semaforización roja (menos del 85% del puntaje máximo de cumplimiento), `r nrow(indicadores_reportados %>% filter(semaforo == "Amarillo"))` amarilla (entre 85% y menos del 100%) y `r nrow(indicadores_reportados %>% filter(semaforo == "Verde"))` verde (100%). 
+
+``` {r estado_indicadores, echo = FALSE, results='asis'}
+cat(glue::glue(" 
+{
+paste(
+if(nrow(indicadores_reportados %>% filter(semaforo == 'Rojo')) != 0) {
+
+paste(if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1,
+              'La institución que', 'Las instituciones que'), 
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1, 
+               'tiene un indicador', 'tienen indicadores'), 
+               'con semáforo rojo',  
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1, 
+               'es', 'son'),   
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1,
+        paste0(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)[1], '.'), ''),          if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 2, 
+          paste(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)[1],            
+                if_else(substr(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)[2], 1, 1) == 
+                'I', ' e ', ' y '),  
+          paste0(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)[2], '.')), ''),  if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) > 2, 
+        paste(
+          paste(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)
+          [-length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion))], collapse = ', '), 
+          if_else(substr(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)
+          [length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion))], 1, 1) == 'I', ' e ', ' y '),
+          paste0(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)[length(unique((indicadores_reportados %>%           filter(semaforo == 'Rojo'))$institucion))], '.')),''), 
+'Conforme a la Metodología Para El Seguimiento Al Plan Estratégico Intersectorial Para La Prevención Y Reducción De La Desnutrición Crónica Infantil, aprobada por el Comité Intersectorial para la prevención y reducción de la DCI,',  if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1, 'esta entidad', 'estas entidades'), if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Rojo'))$institucion)) == 1, 'deberá', 'deberán'),  
+'desarrollar y aplicar planes de mejora, acciones correctivas y una revisión ejecutiva mensual de los avances.', 
+if_else(nrow(indicadores_reportados %>% filter(semaforo == 'Amarillo')) == 0, 
+'Por su parte, aquellas instituciones que tienen indicadores con semaforización verde, deben avanzar en la implementación de las acciones programadas.', ''))
+},
+if(nrow(indicadores_reportados %>% filter(semaforo == 'Amarillo')) != 0) {
+
+paste(if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1,
+'La institución que', 'Las instituciones que'), 
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1, 'tiene un indicador', 'tienen indicadores'), 'con semáforo amarillo',  
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1, 'es', 'son'),   if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1,
+        paste0(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)[1], '.'), ''),          if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 2, 
+          paste(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)[1],            
+                if_else(substr(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)[2], 1, 1) == 
+                'I', ' e ', ' y '),  
+          paste0(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)[2], '.')), ''),  if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) > 2, 
+        paste(
+          paste(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)
+          [-length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion))], collapse = ', '), 
+          if_else(substr(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)
+          [length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion))], 1, 1) == 'I', ' e ', ' y '),
+          paste0(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)[length(unique((indicadores_reportados %>%           filter(semaforo == 'Amarillo'))$institucion))], '.')),''), 
+
+if_else(nrow(indicadores_reportados %>% filter(semaforo == 'Rojo')) == 0, 
+paste('Conforme a la Metodología Para El Seguimiento Al Plan Estratégico Intersectorial Para La Prevención Y Reducción De La Desnutrición Crónica Infantil, aprobada por el Comité Intersectorial para la Prevención y Reducción de la DCI,',  if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1, 'esta entidad', 'estas entidades')), if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1, 'Esta entidad', 'Estas entidades')), 
+if_else(length(unique((indicadores_reportados %>% filter(semaforo == 'Amarillo'))$institucion)) == 1, 'deberá', 'deberán'),  
+'desarrollar una evaluación de riesgos, implementar acciones correctivas y realizar un monitoreo frecuente.', 'Por su parte, aquellas instituciones que tienen indicadores con semaforización verde, deben avanzar en la implementación de las acciones programadas.')
+}
+)
+}
+
+"))
+
+```
+
+
+
+<!-- Por su parte, los de mejor estado son (1) el `r (indicadores_reportados %>% filter(rank %in% c((max(rank)-3):max(rank))) %>% arrange(desc(rank)) %>% select(indicador)  )[1,]` y (2) el `r (indicadores_reportados %>% filter(rank %in% c((max(rank)-3):max(rank))) %>% arrange(desc(rank))  %>% select(indicador))[2,]`, con `r paste0((indicadores_reportados %>% filter(rank %in% c((max(rank)-3):max(rank))) %>% arrange(desc(rank)) %>% select(pcm_2))[1,], "%")` y `r paste0((indicadores_reportados %>% filter(rank %in% c((max(rank)-3):max(rank))) %>% arrange(desc(rank))  %>% select(pcm_2))[2,], "%")`, respectivamente.  -->
+
+
+
+<center><span style='font-size: 20px;'>**Gráfico 4. Estado de los indicadores por institución**</span></center>
+```{r gráfico 4, echo=FALSE, message=FALSE, warning=FALSE, out.width="90%", fig.width=12, fig.height = if_else(unique(indicadores_reportados$semaforo) == 3, 12, 8),  fig.align='center'}
+
+indicadores_reportados_2 <- indicadores_reportados %>% 
+                            mutate(indicador = paste0(toupper(substr(indicador, 1, 1)),  
+                                                      substr(indicador, 2, nchar(indicador)))) %>% 
+                            select(-rank, -indicador_reportado, -periodicidad) %>% 
+                            mutate_if(!(colnames(.) %in% c("pcm_2", "indicador")), as.factor) %>% 
+                            arrange(eje) %>% 
+                            group_by(institucion, semaforo) %>% 
+                            summarize(n = n())  
+
+# Convert the 'semaforo' variable to a factor with the desired order
+indicadores_reportados_2$semaforo <- factor(indicadores_reportados_2$semaforo, levels = c("Verde", "Amarillo", "Rojo"))
+
+# Create the bar chart with the reordered columns
+# Create the bar chart with the reordered columns
+plot4 <- ggplot(indicadores_reportados_2, aes(x = institucion, y = n)) +
+  geom_col(data = indicadores_reportados_2 %>% filter(semaforo == "Verde"), 
+           width = if_else(nrow((indicadores_reportados_2 %>% filter(semaforo == "Verde"))) %in% c(1:3), 0.5, 0.8 ), 
+           aes(fill = "#3CB371")) +
+  geom_col(data = indicadores_reportados_2 %>% filter(semaforo == "Amarillo"), 
+           width = if_else(nrow((indicadores_reportados_2 %>% filter(semaforo == "Amarillo"))) %in% c(1:3), 0.5, 0.8 ), 
+           aes(fill = "#F0E68C")) +
+  geom_col(data = indicadores_reportados_2 %>% filter(semaforo == "Rojo"), 
+           width = if_else(nrow((indicadores_reportados_2 %>% filter(semaforo == "Rojo"))) %in% c(1:3), 0.5, 0.8 ), 
+           aes(fill = "red")) +
+  facet_wrap(~semaforo, scale = "free_x", nrow = if_else(length(unique(indicadores_reportados_2$semaforo)) > 2, 2,  1)) +
+geom_text(aes(label = round(n, 2)), position = position_stack(vjust = 0.5), color = "black", size = 5) +   labs(y = "Número de indicadores", x = "Semaforización", fill = "") +
+  scale_fill_manual(values = c("#3CB371", "#F0E68C", "red")) +
+  scale_y_continuous(breaks = seq(0, ceiling(max(indicadores_reportados_2$n)), 1)) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  theme(
+    rect = element_blank(),
+    axis.text.x = element_text(size = 12),
+  ) +
+  guides(fill = "none")
+
+plot4
+# ggplotly(plot4)
+
+```
+<div style="font-size: 12px;">
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>
+
+
+```{r, echo = FALSE, results='asis'}
+
+
+if(nrow(ind_rojo) > 1) {
+
+ind_rojo_2 <- ind_rojo %>% 
+  mutate(n = 1:n(), 
+         indicador = paste(paste0("(", n, ")"), indicador), indicador)
+
+ 
+if(nrow(ind_rojo_2 > 3)) {
+  
+  ind_rojo_2 <- ind_rojo_2[1:5, ]
+  
+}
+
+
+} else {
+
+ind_rojo_2 <- ind_rojo    
+  
+}
+  
+  
+cat(glue::glue("Los indicadores que tienen un menor cumplimiento son {
+if(nrow(ind_rojo_2 > 0)) {
+paste(
+case_when(nrow(ind_rojo_2) == 1 ~ as.character(ind_rojo_2[1, 1]), 
+          nrow(ind_rojo_2) == 2 ~ paste(ind_rojo_2[1, 1], 'y', ind_rojo_2[2, 1]),
+          nrow(ind_rojo_2)  > 2 ~ 
+                            paste(
+                                  paste(
+                                  ind_rojo_2$indicador[-nrow(ind_rojo_2[, 1])], collapse = ', ' ), 
+                                  'y', 
+                                  ind_rojo_2$indicador[nrow(ind_rojo_2[, 1])], collapse = ', '
+                                  )
+                                  ), 
+'con menos de 85 puntos de cumplimiento de meta.'
+  )
+}
+}
+"))
+
+```
+
+
+```{r referencia_anexo_1, echo = FALSE, eval = descarga, results='asis'}
+
+cat(glue::glue(
+"Para que el lector pueda hacer una revisión más pormenorizada, en el Anexo 1 se muestran todos los indicadores reportados {ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))} de {year(fecha_corte)}, con su respectivo puntaje, categorización por eje, jerarquía, institución y semaforización."
+))
+
+```
+
+```{r tabla_1, echo = FALSE, eval = no_descarga, results='asis'}
+
+cat(glue::glue(
+"En la siguiente tabla se presentan todos los indicadores reportados {ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))} de {year(fecha_corte)}. Dado el carácter dinámico de la tabla, el lector puede personalizar la consulta filtrándola u ordenándola en función de la jeraquía del indicador (resultado/gestión), la institución a la que pertenece, el porcentaje de cumplimiento y la semaforización. <br>
+
+<center><span style='font-size: 20px;'>**Tabla 1. Indicadores individuales**</span></center>"
+))
+
+
+indicadores_reportados_2 <- indicadores_reportados %>% 
+                            mutate(indicador = paste0(toupper(substr(indicador, 1, 1)),  
+                                                      substr(indicador, 2, nchar(indicador)))) %>% 
+                            select(-rank, -indicador_reportado, -periodicidad) %>% 
+                            mutate_if(!(colnames(.) %in% c("pcm_2", "indicador")), as.factor) %>% 
+                            arrange(eje) %>% 
+                            group_by(semaforo) %>% 
+                            mutate(ind = 1, 
+                                   n_ind = n())
+
+
+indicadores_reportados_3 <- indicadores_reportados_2 %>% 
+                            select(-ind, -n_ind)
+
+colnames(indicadores_reportados_3) <- 
+c("Eje estratégico", "Jerarquía", "Indicador", "Institución", "Puntos de\ncumplimiento\nde meta", "Semá- foro")
+
+dt <- datatable(
+  indicadores_reportados_3,
+  filter = "top", 
+  options = list(
+    autowidth = FALSE,
+      columnDefs = list(list(width = '300px', 
+                             targets = c(which(colnames(indicadores_reportados_2) == "Indicador")))),
+                        list(width = '200px', 
+                             targets = c(which(colnames(indicadores_reportados_2) == "Institu- ción"))),                         list(width = '10px', 
+                             targets = c(which(!colnames(indicadores_reportados_2) %in% c("Indicador", "Institu- ción")))),
+    pageLength = 10,
+    scrollX = TRUE,
+    fixedColumns = TRUE
+  )) %>% 
+  formatStyle(columns = c(1:ncol(indicadores_reportados_2)), fontSize = '80%', textAlign = 'left')
+
+
+dt
+
+
+cat(glue::glue("
+<div style='font-size: 12px;'>
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>               
+"))
+ 
+```
+
+
+<font size="5">**Limitaciones frente al avance en la consecución del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI **</font>
+
+En la `r if_else(params$descarga == TRUE, 'Tabla 1', 'Tabla 2')` se presenta una reproducción textual de las limitaciones para el avance de acciones y cumplimiento de metas que las instituciones que operativizan el PEIPRDCI expresaron en sus reportes mensuales `r ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))` de `r year(fecha_corte)`. 
+
+
+<center><span style='font-size: 20px;'>**`r if_else(params$descarga == TRUE, 'Tabla 1', 'Tabla 2')`. Limitaciones en la consecución del PEIPRDCI por institución y por indicador**</span></center><br>
+```{r tabla_2, echo = FALSE}
+
+datos_ini4 <- datos_ini2 %>% 
+              select(lim = starts_with("lim"), everything()) %>% 
+              mutate(lim_gen = !!sym(paste0("lim", mes_reporte)))
+
+for(i in 1:(if_else(mes_reporte == 1, 1, mes_reporte-1))) {
+  
+  datos_ini4 <- datos_ini4 %>% 
+                mutate(lim_gen = if_else(is.na(lim_gen), !!sym(paste0("lim", if_else(mes_reporte == 1, 1, mes_reporte-1))), lim_gen))
+}
+
+
+datos_ini4 <- datos_ini4 %>% select(starts_with("lim"), everything())
+
+tabla_limitaciones <- datos_ini4 %>% 
+                      select(institucion, indicador, lim_gen) %>% 
+                      filter(!is.na(lim_gen))
+
+colnames(tabla_limitaciones) <- c("Institución", "Indicador", "Limitación")
+
+tab_lim <- tabla_limitaciones %>%
+            kbl(table.attr = "style='width:300%;'") %>%
+            kable_classic_2(full_width = F,
+                            html_font = "Cambria", 
+                            font_size = 14  
+                            ) %>%
+            row_spec(0, background = "darkblue", bold = T, color = "white")
+tab_lim
+
+```
+<div style="font-size: 12px;">
+**Fuente:** Información entregada por cada una de las instituciones vinculadas al abordaje de la DCI en el marco del Plan Estratégico Intersectorial para la Prevención y Reducción de la DCI.
+</div>
+\   
+\   
+\   
+\   
+
+<font size="5">**Conclusiones y recomendaciones**</font>
+
+```{r conclusiones, echo = FALSE, results='asis'}
+cat(glue::glue("
+
+De los 76 indicadores aprobados en {year(fecha_corte)}, en este reporte se analizó los {nrow(indicadores_reportados)} para los que existe información {ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))} del presente año. En este periodo, el IG alcanzó un resultado de {ig_3[nrow(ig_3), meses[mes_reporte]]} puntos. El eje relacionado a la {eje_min} es el que presenta el menor puntaje. En cuanto al AI, de las {nrow(indicadores_reportados %>% distinct(institucion))} instituciones públicas que reportaron el estado de sus indicadores, {paste(
+
+if(nrow(inst_verde) > 0) {
+paste(
+nrow(inst_verde), 
+if_else(nrow(inst_verde) == 1, 'tiene', 'tienen'), 
+paste0('una puntuación perfecta', case_when(nrow(inst_amarillo) == 0 & nrow(inst_rojo) == 0 ~ '.', 
+                                            nrow(inst_amarillo) != 0 & nrow(inst_rojo) == 0 ~ ' y ', 
+                                            nrow(inst_amarillo) == 0 & nrow(inst_rojo) != 0 ~ ' y ', 
+                                            nrow(inst_amarillo) != 0 & nrow(inst_rojo) != 0 ~ ', ', 
+                                            )))
+}, 
+
+if(nrow(inst_amarillo) > 0) {
+paste(
+nrow(inst_amarillo), 
+if_else(nrow(inst_amarillo) == 1, 'tiene', 'tienen'), 
+paste0('una puntuación entre 85 y menos de 100', case_when(nrow(inst_rojo) == 0 ~ '.', 
+                                                  nrow(inst_rojo) != 0 ~ ' y ', 
+                                            ) 
+    ))
+},
+
+if(nrow(inst_rojo > 0)) {
+paste(
+nrow(inst_rojo), 
+if_else(nrow(inst_rojo) == 1, 'tiene', 'tienen'), 
+paste0('un puntaje menor a 85','.') 
+)
+}, 
+if(nrow(indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo'))) != 0) {
+paste(  
+'Las instituciones que tienen indicadores con semaforización amarilla y/o roja', 
+if_else(length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)) == 1, 
+               'es', 'son'),   
+if_else(length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)) == 1,
+        paste0(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)[1], '.'), ''),          if_else(length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)) == 2, 
+          paste(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)[1],            
+                if_else(substr(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)[2], 1, 1) == 
+                'I', ' e ', ' y '),  
+          paste0(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)[2], '.')), ''),  if_else(length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)) > 2, 
+        paste(
+          paste(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)
+          [-length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion))], collapse = ', '), 
+          if_else(substr(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)
+          [length(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion))], 1, 1) == 'I', ' e ', ' y '),
+          paste0(unique((indicadores_reportados %>% filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion)[length(unique((indicadores_reportados %>%           filter(semaforo %in% c('Amarillo', 'Rojo')))$institucion))], '.')),''))
+}, 'De acuerdo con la metodología citada en este documento, estas instituciones deberán aplicar las medidas preventivas y/o correctivas del caso para cumplir con los compromisos expuestos en el PEIPRDCI.')}"))
+
+```
+
+```{r tabla_1_descarga, echo = FALSE, eval = descarga, results='asis'}
+
+cat(glue::glue(
+"<center><span style='font-size: 20px;'>**Anexo 1. Lista de indicadores reportados {ifelse(mes_reporte == 1, paste('en', meses[1]), paste('entre', meses[1], 'y', meses[mes_reporte]))} de {year(fecha_corte)} **</span></center><br>"  
+))
+
+indicadores_reportados_2 <- indicadores_reportados %>% 
+                            mutate(indicador = paste0(toupper(substr(indicador, 1, 1)),  
+                                                      substr(indicador, 2, nchar(indicador)))) %>% 
+                            select(-rank, -indicador_reportado, -periodicidad) %>% 
+                            mutate_if(!(colnames(.) %in% c("pcm_2", "indicador")), as.factor) %>% 
+                            arrange(eje) %>% 
+                            group_by(semaforo) %>% 
+                            mutate(ind = 1, 
+                                   n_ind = n())
+
+indicadores_reportados_3 <- indicadores_reportados_2 %>% 
+                            select(-ind, -n_ind)
+
+colnames(indicadores_reportados_3) <- 
+c("Eje estratégico", "Jerarquía", "Indicador", "Institución", "Puntos de\ncumplimiento\nde meta", "Semá- foro")
+
+indicadores_reportados_3 %>%
+    kbl(table.attr = "style='width:300%;'") %>%
+    kable_classic_2(full_width = F,
+                    html_font = "Cambria"
+                    ) %>% 
+    row_spec(0, background = "darkblue", bold = T, color = "white") 
+
+
+
+```
+
+
+
